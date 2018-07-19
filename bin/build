@@ -1,0 +1,159 @@
+#!/bin/bash
+
+config_dir=~/.config/shell-scripts
+config=$config_dir/config
+
+if [ -f $config ]
+then . $config 
+fi
+
+work_dir=${work_dir:-~/shell-scripts}
+source_dir=${source_dir:-$work_dir/src}
+lib_dir=${lib_dir:-$work_dir/lib}
+prod_dir=${prod_dir:-$work_dir/release}
+tmp_dir=${tmp_dir:-$work_dir/tmp}
+test_dir=${test_dir:-$work_dir/test}
+
+for dir in $source_dir $lib_dir $prod_dir $tmp_dir $test_dir
+do if [ ! -d $dir ]
+   then if ! mkdir -p $dir 
+        then exit 1
+        fi
+   fi
+done 
+
+version="$(date +%s)"
+
+if [ -z "$1" ]
+then echo please pass a script to build 
+     exit 1
+fi
+
+script=$(grep -o '^[[:alnum:]]*' <<< "$1")
+in_file="$tmp_dir/$script.in"
+out_file="$tmp_dir/$script.out"
+
+
+function insertLib () {
+   lib_to_insert="$1"
+
+   if [ ! -f "$lib_to_insert" ]
+   then echo "Unknown library $lib_to_insert"
+   	  exit 1
+   fi
+
+   awk -v INSERTLINE=$insertline -v LIB="$lib_to_insert" '
+   { 
+   	if (NR == INSERTLINE) {
+   		print " "
+   		command=sprintf("cat %s", LIB)
+   		system(command)
+   		print $0;
+  		} else {
+   		print $0;
+  		}
+  	}' $in_file &> $out_file
+   cp $out_file $in_file
+}
+
+if ! cd $source_dir
+then echo failed to cd to source dir $source_dir
+     exit 1
+fi
+
+
+if [ -f "$script.sh" ]
+then shellscript="$script.sh"
+elif [ -f "$script" ]
+then shellscript="$script" # Just encase no .sh ext on script
+else echo "Unable to find shell-script for $script"
+	  exit 1
+fi
+
+rm -f $test_dir/${shellscript}*
+cp $shellscript $in_file
+
+insertline="$(awk '!/^#/ {print NR}' $shellscript|head -1)"
+
+echo checking for depreciated functions
+source $lib_dir/depreciated/depreciated.def
+old_function_found=0
+for old_function in $DEPRECIATEDFUNCTIONS
+do awk -v FUNCTION=$old_function '$0 ~ FUNCTION { print "Depreciated function " FUNCTION " found on line: " NR; print $0 } ' $shellscript
+	grep -w $old_function $shellscript  &> /dev/null && old_function_found=1
+done
+if [ $old_function_found == 1 ]
+then read -p "Would you like to continue building $shellscript? ( Y/N ): " yn
+     if [[ "$yn" != [Yy] ]]
+     then exit 1
+     fi
+fi
+libs="$(grep -o '^function [^(]*' $lib_dir/* 2> /dev/null|sed -e 's/:function */:/'|tr '\n' ' ')"
+
+unset inserted_libs
+clean_run=1
+
+echo injecting dependencies
+while [ $clean_run != 0 ]
+do clean_run=0
+	for lib_func in $libs
+   do lib="$(cut -d':' -f 1 <<< "$lib_func")"
+      func="$(cut -d':' -f 2 <<< "$lib_func")"
+      if [ -z "$lib" ] || [ -z "$func" ]
+      then echo "this shouldn't be happening. empty lib or no lib with no functions"
+           echo "lib:$lib func:$func"
+           continue #Something is wrong
+      fi
+		grep -w "$lib" <<< "$inserted_libs" && break #Already inserted
+      if grep -w $func $in_file &> /dev/null
+      then insertLib ${lib}
+           inserted_libs=+" ${lib}"
+           clean_run=1
+           break
+      fi
+	done
+done
+
+echo injecting global script variables
+awk -v INSERTLINE=$insertline -v SCRIPTNAME=$shellscript -v VERSION=$version -v GLOBALVARS=$lib_dir/global_vars '{
+   if (NR == INSERTLINE) {
+      print " "
+      printf("VERSION=%s\n", VERSION)
+      printf("SCRIPTNAME=%s\n", SCRIPTNAME)
+      command=sprintf("cat %s", GLOBALVARS)
+      system(command)
+      print $0;
+   } else {
+      print $0;
+   }
+}' $in_file &> $out_file
+ 
+rm $in_file
+mv $out_file $tmp_dir/$shellscript
+echo "injection complete"
+echo "copying script to test area"
+cp -vf $tmp_dir/$shellscript $test_dir
+chmod +x $test_dir/$shellscript
+cd $test_dir
+echo dropping you into test area
+bash
+read -p "Ready for production? (Y/N) : " yn
+case $yn in
+   y|Y) cp -vf $work_dir/$shellscript $prod_dir 
+        echo $version > $prod_dir/${script}.ver;;
+   *)
+   echo "Exiting."
+   exit
+esac
+
+change_log=$tmp_dir/changelog
+echo put some notes for your change, CTRL+D on a blank line to finish
+cat > $change_log 
+CHANGENOTES=$(cat $change_log|tr '\n' ' ')
+CHANGE_LOG_FULL_MESSAGE="$SCRIPT : $NEWVER : $CHANGETYPE : $CHANGENOTES" 
+cd $source_dir
+echo "Committing changes to git"
+git add --all
+git commit -m "$CHANGE_LOG_FULL_MESSAGE"
+echo "Pushing to remote repo"
+git push 

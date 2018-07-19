@@ -1,0 +1,10 @@
+**/archive/
+**prod/*
+**reports/*
+*.tmp
+*.new
+*.changelog
+*.ver
+*.swp
+*.swo
+*.log
