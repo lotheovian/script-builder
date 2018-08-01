@@ -39,20 +39,20 @@ function insert_lib () {
 
    if [ ! -f "$lib_to_insert" ]
    then echo "Unknown library $lib_to_insert"
-   	  exit 1
+        exit 1
    fi
 
    awk -v INSERTLINE=$insertline -v LIB="$lib_to_insert" '
    { 
-   	if (NR == INSERTLINE) {
-   		print " "
-   		command=sprintf("cat %s", LIB)
-   		system(command)
-   		print $0;
-  		} else {
-   		print $0;
-  		}
-  	}' $in_file &> $out_file
+      if (NR == INSERTLINE) {
+         print " "
+         command=sprintf("cat %s", LIB)
+         system(command)
+         print $0;
+      } else {
+         print $0;
+      }
+   }' $in_file &> $out_file
    cp $out_file $in_file
 }
 
@@ -67,7 +67,7 @@ then shellscript="$script.sh"
 elif [ -f "$script" ]
 then shellscript="$script" # Just encase no .sh ext on script
 else echo "Unable to find shell script for $SCRIPT"
-	  exit 1
+     exit 1
 fi
 
 rm -f $test_dir/${shellscript}*
@@ -80,7 +80,7 @@ source $lib_dir/depreciated/depreciated.def
 old_function_found=0
 for old_function in $DEPRECIATEDFUNCTIONS
 do awk -v FUNCTION=$old_function '$0 ~ FUNCTION { print "Depreciated function " FUNCTION " found on line: " NR; print $0 } ' $shellscript
-	grep -w $old_function $shellscript  &> /dev/null && old_function_found=1
+   grep -w $old_function $shellscript  &> /dev/null && old_function_found=1
 done
 if [ $old_function_found == 1 ]
 then read -p "Would you like to continue building $shellscript? ( Y/N ): " yn
@@ -96,7 +96,7 @@ clean_run=1
 echo injecting dependencies
 while [ $clean_run != 0 ]
 do clean_run=0
-	for lib_func in $libs
+   for lib_func in $libs
    do lib="$(cut -d':' -f 1 <<< "$lib_func")"
       func="$(cut -d':' -f 2 <<< "$lib_func")"
       if [ -z "$lib" ] || [ -z "$func" ]
@@ -104,13 +104,13 @@ do clean_run=0
            echo "lib:$lib func:$func"
            continue #Something is wrong
       fi
-		grep -w "$lib" <<< "$inserted_libs" &> /dev/null && continue #Already inserted
+      grep -w "$lib" <<< "$inserted_libs" &> /dev/null && continue #Already inserted
       if grep -w $func $in_file &> /dev/null
       then insert_lib ${lib}
            inserted_libs+=" ${lib}"
            clean_run=1
       fi
-	done
+   done
 done
 
 echo injecting global script variables
