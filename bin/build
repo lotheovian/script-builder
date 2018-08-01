@@ -34,7 +34,7 @@ in_file="$tmp_dir/$script.in"
 out_file="$tmp_dir/$script.out"
 
 
-function insertLib () {
+function insert_lib () {
    lib_to_insert="$1"
 
    if [ ! -f "$lib_to_insert" ]
@@ -66,7 +66,7 @@ if [ -f "$script.sh" ]
 then shellscript="$script.sh"
 elif [ -f "$script" ]
 then shellscript="$script" # Just encase no .sh ext on script
-else echo "Unable to find shell-script for $script"
+else echo "Unable to find shell script for $SCRIPT"
 	  exit 1
 fi
 
@@ -104,12 +104,11 @@ do clean_run=0
            echo "lib:$lib func:$func"
            continue #Something is wrong
       fi
-		grep -w "$lib" <<< "$inserted_libs" && break #Already inserted
+		grep -w "$lib" <<< "$inserted_libs" &> /dev/null && continue #Already inserted
       if grep -w $func $in_file &> /dev/null
-      then insertLib ${lib}
-           inserted_libs=+" ${lib}"
+      then insert_lib ${lib}
+           inserted_libs+=" ${lib}"
            clean_run=1
-           break
       fi
 	done
 done
