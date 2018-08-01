@@ -138,7 +138,7 @@ echo dropping you into test area
 bash
 read -p "Ready for production? (Y/N) : " yn
 case $yn in
-   y|Y) cp -vf $work_dir/$shellscript $prod_dir 
+   y|Y) cp -vf $tmp_dir/$shellscript $prod_dir 
         echo $version > $prod_dir/${script}.ver;;
    *)
    echo "Exiting."
